@@ -259,8 +259,62 @@ app.delete('/api/buses/:busNumber/trips/:tripNumber', async (req, res) => {
     }
 });
 
-// Get buses based on fromStop and toStop
+// Get buses by stop_name and show entire trips containing the stop
+app.get('/api/buses/stop/:stopName', async (req, res) => {
+    const { stopName } = req.params;
 
+    try {
+        // Find buses that have at least one trip with the specified stop name
+        const buses = await Bus.find({ 'trips.stops.stop_name': stopName });
+
+        if (buses.length === 0) {
+            return res.status(404).json({ message: 'No buses found for the given stop name' });
+        }
+
+        // Extract and return the entire trips that include the specified stop
+        const trips = [];
+        buses.forEach(bus => {
+            bus.trips.forEach(trip => {
+                trip.stops.forEach(stop => {
+                    if (stop.stop_name === stopName) {
+                        trips.push(trip);
+                    }
+                });
+            });
+        });
+
+        res.json(trips);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// Get trips based on from stop_name and to stop_name
+app.get('/api/trips', async (req, res) => {
+    const { fromStopName, toStopName } = req.query;
+
+    try {
+        // Find trips where the stops array contains both fromStopName and toStopName
+        // and ensure fromStopName occurs before toStopName in the stops array
+        const trips = await Trip.find({
+            'stops.stop_name': fromStopName,
+            'stops.stop_name': toStopName,
+            'stops.arrival_time': { $lt: new Date() } // Optionally, filter by arrival time if needed
+        })
+        .sort('stops.arrival_time'); // Sort by arrival time if required
+
+        // Filter trips to ensure fromStopName occurs before toStopName in the stops array
+        const filteredTrips = trips.filter(trip => {
+            const fromIndex = trip.stops.findIndex(stop => stop.stop_name === fromStopName);
+            const toIndex = trip.stops.findIndex(stop => stop.stop_name === toStopName);
+            return fromIndex !== -1 && toIndex !== -1 && fromIndex < toIndex;
+        });
+
+        res.json(filteredTrips);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
 
 
 
